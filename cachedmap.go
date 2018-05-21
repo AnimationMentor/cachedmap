@@ -101,9 +101,10 @@ func (c *CachedMap) Get(key string) (interface{}, bool) {
 }
 
 func (c *CachedMap) String() string {
-	return fmt.Sprintf("<len=%d maxlen=%d hits=%d misses=%d flushes=%d ttl=%s fc=%s>",
+	return fmt.Sprintf("<len=%d maxlen=%d hits=%d misses=%d writes=%d flushes=%d ttl=%s fc=%s>",
 		c.Len(), c.MaxLength,
 		c.Hits, c.Misses,
+		c.Writes,
 		c.Flushes,
 		c.keyTimeout, c.flushCycle,
 	)
