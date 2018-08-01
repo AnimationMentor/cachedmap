@@ -28,6 +28,15 @@ type CacheEntry struct {
 	RemoveTime time.Time
 }
 
+type Stats struct {
+	Hits      int64 `json:"hits"`
+	Misses    int64 `json:"misses"`
+	Writes    int64 `json:"writes"`
+	Flushes   int64 `json:"flushes"`
+	MaxLength int   `json:"max_length"`
+	Length    int   `json:"length"`
+}
+
 func NewCachedMap(keyTimeout, flushCycle time.Duration, log *logrus.Entry) *CachedMap {
 	cm := &CachedMap{
 		keyTimeout: keyTimeout,
@@ -108,4 +117,21 @@ func (c *CachedMap) String() string {
 		c.Flushes,
 		c.keyTimeout, c.flushCycle,
 	)
+}
+
+func (c *CachedMap) GetStats() Stats {
+	// MaxLength is only set at flush time so we might need to update it here.
+	l := c.Len()
+	m := c.MaxLength
+	if l > m {
+		m = l
+	}
+	return Stats{
+		Hits:      c.Hits,
+		Misses:    c.Misses,
+		Writes:    c.Writes,
+		Flushes:   c.Flushes,
+		MaxLength: m,
+		Length:    l,
+	}
 }
