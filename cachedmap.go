@@ -120,12 +120,18 @@ func (c *CachedMap) String() string {
 }
 
 func (c *CachedMap) GetStats() Stats {
+	// MaxLength is only set at flush time so we might need to update it here.
+	l := c.Len()
+	m := c.MaxLength
+	if l > m {
+		m = l
+	}
 	return Stats{
 		Hits:      c.Hits,
 		Misses:    c.Misses,
 		Writes:    c.Writes,
 		Flushes:   c.Flushes,
-		MaxLength: c.MaxLength,
-		Length:    c.Len(),
+		MaxLength: m,
+		Length:    l,
 	}
 }
