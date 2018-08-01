@@ -1,7 +1,6 @@
 package cachedmap
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,6 +9,7 @@ import (
 )
 
 type CachedMap struct {
+	Name       string
 	Hits       int64
 	Misses     int64
 	Writes     int64
@@ -19,8 +19,7 @@ type CachedMap struct {
 	lock       sync.RWMutex
 	keyTimeout time.Duration
 	flushCycle time.Duration
-
-	Log *logrus.Entry
+	log        *logrus.Entry
 }
 
 type CacheEntry struct {
@@ -29,21 +28,39 @@ type CacheEntry struct {
 }
 
 type Stats struct {
-	Hits      int64 `json:"hits"`
-	Misses    int64 `json:"misses"`
-	Writes    int64 `json:"writes"`
-	Flushes   int64 `json:"flushes"`
-	MaxLength int   `json:"max_length"`
-	Length    int   `json:"length"`
+	Name       string `json:"name"`
+	Hits       int64  `json:"hits"`
+	Misses     int64  `json:"misses"`
+	Writes     int64  `json:"writes"`
+	Flushes    int64  `json:"flushes"`
+	MaxLength  int    `json:"max_length"`
+	Length     int    `json:"length"`
+	KeyTTL     int64  `json:"key_ttl"`
+	FlushCycle int64  `json:"flush_cycle"`
 }
 
-func NewCachedMap(keyTimeout, flushCycle time.Duration, log *logrus.Entry) *CachedMap {
+/* TS definition:
+export class CachedMapStats {
+	name: 			string;
+	hits: 			number;
+	misses: 		number;
+	writes: 		number;
+	flushes: 		number;
+	max_length: 	number;
+	length: 		number;
+	key_ttl: 		number;
+	flush_cycle: 	number;
+}
+*/
+
+func NewCachedMap(name string, keyTimeout, flushCycle time.Duration, log *logrus.Entry) *CachedMap {
 	cm := &CachedMap{
+		Name:       name,
 		keyTimeout: keyTimeout,
 		flushCycle: flushCycle,
 		entries:    make(map[string]CacheEntry, 100),
-		Log:        log,
 	}
+	cm.SetLog(log)
 	cm.flusher()
 	return cm
 }
@@ -61,8 +78,8 @@ func (c *CachedMap) flusher() {
 			if len(oldEntries) > c.MaxLength {
 				c.MaxLength = len(oldEntries)
 			}
-			if c.Log != nil {
-				c.Log.Info(c.String())
+			if c.log != nil {
+				c.log.Info(c.GetStats())
 			}
 		}
 	}()
@@ -109,16 +126,7 @@ func (c *CachedMap) Get(key string) (interface{}, bool) {
 	return e.Data, true
 }
 
-func (c *CachedMap) String() string {
-	return fmt.Sprintf("<len=%d maxlen=%d hits=%d misses=%d writes=%d flushes=%d ttl=%s fc=%s>",
-		c.Len(), c.MaxLength,
-		c.Hits, c.Misses,
-		c.Writes,
-		c.Flushes,
-		c.keyTimeout, c.flushCycle,
-	)
-}
-
+// GetStats returns current stats in a convenient, loggable, struct.
 func (c *CachedMap) GetStats() Stats {
 	// MaxLength is only set at flush time so we might need to update it here.
 	l := c.Len()
@@ -127,11 +135,24 @@ func (c *CachedMap) GetStats() Stats {
 		m = l
 	}
 	return Stats{
-		Hits:      c.Hits,
-		Misses:    c.Misses,
-		Writes:    c.Writes,
-		Flushes:   c.Flushes,
-		MaxLength: m,
-		Length:    l,
+		Name:       c.Name,
+		Hits:       c.Hits,
+		Misses:     c.Misses,
+		Writes:     c.Writes,
+		Flushes:    c.Flushes,
+		MaxLength:  m,
+		Length:     l,
+		KeyTTL:     int64(c.keyTimeout / time.Second),
+		FlushCycle: int64(c.flushCycle / time.Second),
 	}
+}
+
+// SetLog sets the logger used by this component and adds a component identifier.
+// The instance name will be logged via the GetStats() call.
+func (c *CachedMap) SetLog(log *logrus.Entry) {
+	if log == nil {
+		c.log = nil
+		return
+	}
+	c.log = log.WithField("component", "cachedmap")
 }
